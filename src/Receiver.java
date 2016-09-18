@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 
 public class Receiver {
+	private static final int SEQ_NUM = 33;
 	public static void main(String[] args) throws Exception{
 		if (args.length != 2){
 			System.out.println("Required arguements: [Receiver_Port] [file.txt]\n");
@@ -11,17 +12,18 @@ public class Receiver {
 		//String outputFile = args[1];
 		
 		DatagramSocket receiver = new DatagramSocket(port);
-		receiver.setSoTimeout(500);
-		while (receiver.isConnected()) {
+
+		while (true) {
 			DatagramPacket request = new DatagramPacket(new byte[1024], 1024);
 			//receive
 			receiver.receive(request);
 			byte[] byteData = request.getData();
 			String[] stringData = ByteAToStringA(byteData);
+			printData(stringData);
 			int senderSeqNo = Integer.parseInt(stringData[3]);
 			
 			//reply
-			String[] ACK = heading(false, true, 1, senderSeqNo+1);
+			String[] ACK = heading(false, true, SEQ_NUM, senderSeqNo+1);
 			InetAddress clientHost = request.getAddress();
 			int clientPort = request.getPort();
 			byte[] replyBuf = StringAToByteA(ACK);
@@ -30,7 +32,6 @@ public class Receiver {
 			
 			System.out.println("Reply Sent!");
 		}
-		receiver.close();
 	}
 	
 	public static String[] heading (boolean SYN, boolean ACK, int SeqNo, int AckNo){
@@ -42,6 +43,13 @@ public class Receiver {
 		head[3] = Integer.toString(AckNo);
 		
 		return head;
+	}
+	
+	public static void printData(String[] data){
+		int i = 0;
+		while (i < data.length){
+			System.out.println(data[0]);
+		}
 	}
 	
 	// Converters //
