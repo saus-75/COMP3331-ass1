@@ -2,7 +2,7 @@ import java.io.*;
 import java.net.*;
 
 public class Receiver {
-	private static final int SEQ_NUM = 33;
+	private static final int SEQ_NUM = 31;
 	public static void main(String[] args) throws Exception{
 		if (args.length != 2){
 			System.out.println("Required arguements: [Receiver_Port] [file.txt]\n");
@@ -12,18 +12,24 @@ public class Receiver {
 		//String outputFile = args[1];
 		
 		DatagramSocket receiver = new DatagramSocket(port);
-
+		
+		String whole = "";
+		
 		while (true) {
 			DatagramPacket request = new DatagramPacket(new byte[1024], 1024);
 			//receive
 			receiver.receive(request);
 			byte[] byteData = request.getData();
 			String[] stringData = ByteAToStringA(byteData);
-			printData(stringData);
+			
 			int senderSeqNo = Integer.parseInt(stringData[3]);
 			
+			//String concat
+			String back = stringData[5];
+			whole += back;
+			
 			//reply
-			String[] ACK = heading(false, true, SEQ_NUM, senderSeqNo+1);
+			String[] ACK = heading(false, true, false, SEQ_NUM, senderSeqNo+1);
 			InetAddress clientHost = request.getAddress();
 			int clientPort = request.getPort();
 			byte[] replyBuf = StringAToByteA(ACK);
@@ -31,25 +37,46 @@ public class Receiver {
 			receiver.send(reply);
 			
 			System.out.println("Reply Sent!");
+			if (stringData[2].equals(true)){
+				receiver.close();
+				break;
+			}
+		}
+		
+		try{
+			String trimmer = whole.trim();
+			outputText(trimmer);
+		} catch (FileNotFoundException e){
+			System.err.println("text empty.");
 		}
 	}
 	
-	public static String[] heading (boolean SYN, boolean ACK, int SeqNo, int AckNo){
-		String[] head = new String[4];
+	//server header maker 
+	public static String[] heading (boolean SYN, boolean ACK, boolean FIN, int SeqNo, int AckNo){
+		String[] head = new String[5];
 		
 		head[0] = Boolean.toString(SYN);
 		head[1] = Boolean.toString(ACK);
-		head[2] = Integer.toString(SeqNo);
-		head[3] = Integer.toString(AckNo);
+		head[2] = Boolean.toString(FIN);
+		head[3] = Integer.toString(SeqNo);
+		head[4] = Integer.toString(AckNo);
 		
 		return head;
 	}
 	
+	//basic header printer
 	public static void printData(String[] data){
 		int i = 0;
 		while (i < data.length){
 			System.out.println(data[0]);
 		}
+	}
+	
+	//text output
+	public static void outputText(String text) throws FileNotFoundException{
+		PrintWriter out = new PrintWriter(text);
+		out.print(text);
+		out.close();
 	}
 	
 	// Converters //
