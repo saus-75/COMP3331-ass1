@@ -122,7 +122,6 @@ public class Receiver {
 				receiver.receive(ACKPacket);
 				byte[] ACKB = ACKPacket.getData();
 				String[] ACK = ByteAToStringA(ACKB);
-				System.out.println(ACK[1]);
 				if (ACK[1].equals("true")){
 					System.out.println("ACK received");
 					recv++;
