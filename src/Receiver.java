@@ -19,8 +19,14 @@ public class Receiver {
 		int clientPort = 0;
 		int SN = SEQ_NUM;
 		int senderACKno = 0;
-		PrintWriter logFile = new PrintWriter("Receiver_log.txt");
+		PrintWriter log = new PrintWriter("Receiver_log.txt");
+		long start = System.currentTimeMillis();
+		long relative = 0;
 		
+		//log vars
+		long data = 0;
+		int recv = 0;
+	
 		//3-way handshake
 		while (connected != 1){
 			DatagramPacket SYNPacket = new DatagramPacket (new byte[1024], 1024);
@@ -29,7 +35,9 @@ public class Receiver {
 			String[] SYN = ByteAToStringA(SYNData);
 			
 			System.out.println("SYN received");
-			
+			recv++;
+			relative = System.currentTimeMillis() - start;
+			log.println("rcv" + "  " + relative + " S    " + 0 +" "+SN);
 			clientHost = SYNPacket.getAddress();
 			clientPort = SYNPacket.getPort();
 			
@@ -41,10 +49,15 @@ public class Receiver {
 				DatagramPacket SYNACKPacket = new DatagramPacket(SYNACKBuf, SYNACKBuf.length, clientHost, clientPort);
 				receiver.send(SYNACKPacket);
 				System.out.println("SYNACK sent");
+				relative = System.currentTimeMillis() - start;
+				log.println("snd" + "  " + relative + " SA   " + 0 +" "+SN);
 				
 				DatagramPacket ACKPacket = new DatagramPacket (new byte[1024], 1024);
 				receiver.receive(ACKPacket);
 				System.out.println("ACK received");
+				recv++;
+				relative = System.currentTimeMillis() - start;
+				log.println("rcv" + "  " + relative + " A    " + 0 +" "+SN);
 				byte[] ACKData = ACKPacket.getData();
 				String[] ACK = ByteAToStringA(ACKData);
 				if (ACK[1].equals("true")){
@@ -63,8 +76,12 @@ public class Receiver {
 			//receive
 			receiver.receive(request);
 			System.out.println("Packet Received");
+			recv++;
 			byte[] byteData = request.getData();
 			String[] stringData = ByteAToStringA(byteData);
+			relative = System.currentTimeMillis() - start;
+			log.println("rcv" + "  " + relative + " D    " + stringData[4].getBytes().length +" "+SN);
+			data += stringData[4].getBytes().length;
 			
 			if (stringData[2].equals("false")){
 				//String concat
@@ -79,40 +96,45 @@ public class Receiver {
 				receiver.send(reply);
 				
 				System.out.println("Reply Sent!");
+				relative = System.currentTimeMillis() - start;
+				log.println("snd" + "  " + relative + " A    " + 0 +" "+SN);
 				
 			//4-way connection teardown
-				//First FIN
+				//FIN
 			}else if (stringData[2].equals("true")){
 				System.out.println("FIN received");
+				recv++;
+				relative = System.currentTimeMillis() - start;
+				log.println("snd" + "  " + relative + " F    " + 0 +" "+SN);
 				System.out.println("Connection teardown initiated...");
 				
-				//First ACK
-				String[] ACK1 = heading(true, true, false, SN, senderACKno++);
-				byte[] ACK1Buf = StringAToByteA(ACK1);
-				DatagramPacket ACK1Packet = new DatagramPacket(ACK1Buf, ACK1Buf.length, clientHost, clientPort);
-				receiver.send(ACK1Packet);
-				System.out.println("ACK sent");
+				//FINACK
+				String[] FINACKS = heading(false, true, true, SN, senderACKno++);
+				byte[] FINACK = StringAToByteA(FINACKS);
+				DatagramPacket FINACKPacket = new DatagramPacket(FINACK, FINACK.length, clientHost, clientPort);
+				receiver.send(FINACKPacket);
+				System.out.println("FINACK sent");
+				relative = System.currentTimeMillis() - start;
+				log.println("snd" + "  " + relative + " FA   " + 0 +" "+SN);
 				
-				//Second FIN
-				DatagramPacket FIN2Packet = new DatagramPacket(new byte[1024], 1024);
-				receiver.receive(FIN2Packet);
-				byte[] FIN2B = request.getData();
-				String[] FIN2 = ByteAToStringA(FIN2B);
-				
-				if (FIN2[2].equals("true")){
-					System.out.println("FIN received");
-					//Second ACK
-					String[] ACK2 = heading(true, true, false, SN, senderACKno++);
-					byte[] ACK2Buf = StringAToByteA(ACK2);
-					DatagramPacket ACK2Packet = new DatagramPacket(ACK2Buf, ACK2Buf.length, clientHost, clientPort);
-					receiver.send(ACK2Packet);
-					System.out.println("ACK sent");
+				//ACK
+				DatagramPacket ACKPacket = new DatagramPacket(new byte[1024], 1024);
+				receiver.receive(ACKPacket);
+				byte[] ACKB = ACKPacket.getData();
+				String[] ACK = ByteAToStringA(ACKB);
+				System.out.println(ACK[1]);
+				if (ACK[1].equals("true")){
+					System.out.println("ACK received");
+					recv++;
+					relative = System.currentTimeMillis() - start;
+					log.println("snd" + "  " + relative + " A    " + 0 +" "+SN);
 					receiver.close();
 					//output string
 					String trimmer = whole.trim();
 					outputText(trimmer, outputFile);
-					System.out.println("socket closed");
-					logFile.close();
+					System.out.println("Socket closed");
+					log.println("Total Data Received " + data + "\nData Segment Received " + recv);
+					log.close();
 					return;
 				}
 			}

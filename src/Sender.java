@@ -34,6 +34,13 @@ public class Sender {
 		PrintWriter log = new PrintWriter("Sender_log.txt");
 		long start = System.currentTimeMillis();
 		long relative = 0;
+		
+		//Log vars
+		long totalData = 0;
+		int sent = 0;
+		int drops = 0;
+		int retrans = 0;
+		
 		//initialise socket
 		DatagramSocket senderSocket = new DatagramSocket();
 		
@@ -53,6 +60,7 @@ public class Sender {
 			relative = System.currentTimeMillis() - start;
 			log.println("snd" + "  " + relative + " S    " + 0 +" "+SN);
 			System.out.println("SYN sent");
+			sent++;
 			
 			//Wait for SYNACK reply
 			DatagramPacket SYNACKPacket = new DatagramPacket(new byte[1024], 1024);
@@ -75,6 +83,7 @@ public class Sender {
 					DatagramPacket ACKPacket = new DatagramPacket(ACK, ACK.length, IP, port);
 					senderSocket.send(ACKPacket);
 					System.out.println("ACK sent");
+					sent++;
 					relative = System.currentTimeMillis() - start;
 					log.println("snd" + "  " + relative + " A    " + 0 +" "+ SN);
 					System.out.println("Connection Established");
@@ -124,12 +133,16 @@ public class Sender {
 				DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IP, port);
 				senderSocket.send(sendPacket);
 				System.out.println("Sent");
+				sent++;
+				totalData += cutString.getBytes().length;
 				relative = System.currentTimeMillis() - start;
 				log.println("snd" + "  " + relative + " D    " + cutString.getBytes().length +" "+SN);
 			} else {
 				System.out.println("Packet Dropped");
 				relative = System.currentTimeMillis() - start;
 				log.println("drop" + " " + relative + " D    " + cutString.getBytes().length +" "+SN);
+				drops++;
+				totalData += cutString.getBytes().length;
 			}
 			//Sanitising my int and my Byte arrays
 			i = 0;
@@ -157,6 +170,7 @@ public class Sender {
 				bytePosition = pastPos;
 				SN -= dataSize;
 				System.out.println("Retransmitting");
+				retrans++;
 			}
 			/*-------------*/
 		}
@@ -165,47 +179,40 @@ public class Sender {
 		System.out.println("Connection teardown initatied...");
 		String[] FIN1S = packet(false,false,true,SN,ACKno,null);
 		byte[] FIN1 = StringAToByteA(FIN1S);
-		//First FIN
-		DatagramPacket sendPacket1 = new DatagramPacket(FIN1, FIN1.length, IP, port);
-		senderSocket.send(sendPacket1);
-		System.out.println("FIN 1 Sent");
+		//FIN
+		DatagramPacket FINPacket1 = new DatagramPacket(FIN1, FIN1.length, IP, port);
+		senderSocket.send(FINPacket1);
+		System.out.println("FIN Sent");
+		sent++;
 		relative = System.currentTimeMillis() - start;
 		log.println("rcv" + "  " + relative + " F    " + 0 +" "+ SN);
 		SN++;
 		
-		DatagramPacket ACK1Packet = new DatagramPacket(new byte[1024], 1024);
-		senderSocket.receive(ACK1Packet);
-		System.out.println("ACK received");
+		//FINACK
+		DatagramPacket FINACKPacket = new DatagramPacket(new byte[1024], 1024);
+		senderSocket.receive(FINACKPacket);
+		System.out.println("FINACK received");
 		relative = System.currentTimeMillis() - start;
-		log.println("snd" + "  " + relative + " A    " + 0 +" "+ SN);
-		byte[] ACK1B = ACK1Packet.getData();
-		String[] ACK1 = ByteAToStringA(ACK1B);
-		
-		if (ACK1[1].equals("true")){
-			String[] FIN2S = packet(false,false,true,SN,ACKno,null);
-			byte[] FIN2 = StringAToByteA(FIN2S);
-			//Second FIN
-			DatagramPacket sendPacket2 = new DatagramPacket(FIN2, FIN2.length, IP, port);
-			senderSocket.send(sendPacket2);
-			System.out.println("FIN 2 Sent");
-			relative = System.currentTimeMillis() - start;
-			log.println("rcv" + "  " + relative + " F    " + 0 +" "+ SN);
-			SN++;
-			
-			DatagramPacket ACK2Packet = new DatagramPacket(new byte[1024], 1024);
-			senderSocket.receive(ACK2Packet);
-			System.out.println("ACK received");
+		log.println("snd" + "  " + relative + " FA   " + 0 +" "+ SN);
+		byte[] FINACKB = FINACKPacket.getData();
+		String[] FINACK = ByteAToStringA(FINACKB);
+		//ACK and close
+		if (FINACK[1].equals("true") && FINACK[2].equals("true")){	
+			String[] ACKS = packet(false,true,false,SN,ACKno,null);
+			System.out.println(ACKS[1]);
+			byte[] ACKB = StringAToByteA(ACKS);
+			DatagramPacket ACKPacket = new DatagramPacket(ACKB, ACKB.length, IP, port);
+			senderSocket.send(ACKPacket);
+			System.out.println("ACK Sent");
+			sent++;
 			relative = System.currentTimeMillis() - start;
 			log.println("snd" + "  " + relative + " A    " + 0 +" "+ SN);
-			byte[] ACK2B = ACK2Packet.getData();
-			String[] ACK2 = ByteAToStringA(ACK2B);
-			
-			if (ACK2[1].equals("true")){
-				System.out.println("Socket closed");
-				log.close();
-				senderSocket.close();
-				return;
-			}
+			SN++;
+			System.out.println("Socket closed");
+			log.println("Data Transferred " + totalData + "\nSegment Sent " + sent + "\nPackets Dropped " + drops + "\nRestransmitted Packet " + retrans);
+			log.close();
+			senderSocket.close();
+			return;
 		}
 	}
 	
