@@ -18,6 +18,7 @@ public class Receiver {
 		InetAddress clientHost = null;
 		int clientPort = 0;
 		int SN = SEQ_NUM;
+		int senderACKno = 0;
 		
 		//3-way handshake
 		while (connected != 1){
@@ -31,7 +32,7 @@ public class Receiver {
 			clientHost = SYNPacket.getAddress();
 			clientPort = SYNPacket.getPort();
 			
-			int senderACKno = Integer.parseInt(SYN[3]);
+			senderACKno = Integer.parseInt(SYN[3]);
 			
 			if (SYN[0].equals("true")){
 				String[] SYNACK = heading(true, true, false, SN, senderACKno++);
@@ -42,6 +43,7 @@ public class Receiver {
 				
 				DatagramPacket ACKPacket = new DatagramPacket (new byte[1024], 1024);
 				receiver.receive(ACKPacket);
+				System.out.println("ACK received");
 				byte[] ACKData = ACKPacket.getData();
 				String[] ACK = ByteAToStringA(ACKData);
 				if (ACK[1].equals("true")){
@@ -49,9 +51,7 @@ public class Receiver {
 					connected = 1;
 					System.out.println("Connection Established");
 				} else {
-					System.out.println("Connection Lost");
-					receiver.close();
-					return;
+					System.out.println("Connection Not Established");
 				}
 			}
 			
@@ -61,31 +61,54 @@ public class Receiver {
 			DatagramPacket request = new DatagramPacket(new byte[1024], 1024);
 			//receive
 			receiver.receive(request);
+			System.out.println("Packet Received");
 			byte[] byteData = request.getData();
 			String[] stringData = ByteAToStringA(byteData);
-			
-			int senderSeqNo = Integer.parseInt(stringData[3]);
 			
 			if (stringData[2].equals("false")){
 				//String concat
 				String back = stringData[5];
 				whole += back;
-				System.out.println(whole + " {" + senderSeqNo + "}");
-				
+				//System.out.println(whole + " {" + senderSeqNo + "}");
+				senderACKno += back.getBytes().length;
 				//reply
-				String[] ACK = heading(false, true, false, SEQ_NUM, senderSeqNo+1);
+				String[] ACK = heading(false, true, false, SEQ_NUM, senderACKno);
 				byte[] replyBuf = StringAToByteA(ACK);
 				DatagramPacket reply = new DatagramPacket(replyBuf, replyBuf.length, clientHost, clientPort);
 				receiver.send(reply);
 				
 				System.out.println("Reply Sent!");
 				
+			//4-way connection teardown
+				//First FIN
 			}else if (stringData[2].equals("true")){
-				receiver.close();
-				//output string
-				String trimmer = whole.trim();
-				outputText(trimmer, outputFile);
-				break;
+				System.out.println("Connection teardown initiated...");
+				
+				//First ACK
+				String[] ACK1 = heading(true, true, false, SN, senderACKno++);
+				byte[] ACK1Buf = StringAToByteA(ACK1);
+				DatagramPacket ACK1Packet = new DatagramPacket(ACK1Buf, ACK1Buf.length, clientHost, clientPort);
+				receiver.send(ACK1Packet);
+				System.out.println("ACK sent");
+				
+				//Second FIN
+				DatagramPacket FIN2Packet = new DatagramPacket(new byte[1024], 1024);
+				receiver.receive(FIN2Packet);
+				byte[] FIN2B = request.getData();
+				String[] FIN2 = ByteAToStringA(FIN2B);
+				
+				if (FIN2[2].equals("true")){
+					//Second ACK
+					String[] ACK2 = heading(true, true, false, SN, senderACKno++);
+					byte[] ACK2Buf = StringAToByteA(ACK2);
+					DatagramPacket ACK2Packet = new DatagramPacket(ACK2Buf, ACK2Buf.length, clientHost, clientPort);
+					receiver.send(ACK2Packet);
+					System.out.println("ACK sent");
+					receiver.close();
+					//output string
+					String trimmer = whole.trim();
+					outputText(trimmer, outputFile);
+				}
 			}
 		}
 	}
@@ -114,7 +137,6 @@ public class Receiver {
 	//text output
 	public static void outputText(String text, String output) throws FileNotFoundException{
 		PrintWriter out = new PrintWriter(output);
-		System.out.println(text + "{2020202}");
 		out.println(text);
 		out.close();
 	}

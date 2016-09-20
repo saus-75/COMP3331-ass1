@@ -29,6 +29,7 @@ public class Sender {
 		byte[]cutByte = new byte[MMS];
 		int bytePosition = 0;
 		int pastPos = 0;
+		int ACKno = 0;
 		Random pld = new Random(seed);
 				
 		//initialise socket
@@ -40,7 +41,6 @@ public class Sender {
 		
 		/*3 Way handshake*/
 		if (connected != 1){
-			int ACKno = 0;
 			
 			String[]  SYNString = packet(true,false,false,SN,ACKno,null);
 			byte[] SYN = StringAToByteA(SYNString);
@@ -48,7 +48,7 @@ public class Sender {
 			//Send SYN
 			DatagramPacket SYNPacket = new DatagramPacket(SYN, SYN.length, IP, port);
 			senderSocket.send(SYNPacket);
-			System.out.println("Sent");
+			System.out.println("SYN sent");
 			
 			//Wait for SYNACK reply
 			DatagramPacket SYNACKPacket = new DatagramPacket(new byte[1024], 1024);
@@ -58,6 +58,7 @@ public class Sender {
 				senderSocket.receive(SYNACKPacket);
 				byte[] SYNACKDataByte = SYNACKPacket.getData();
 				String[] SYNACK = ByteAToStringA(SYNACKDataByte);
+				System.out.println("SYNACK received");
 				if (SYNACK[0].equals("true") && SYNACK[1].equals("true")){
 					//Reply with an ACK
 					ACKno = Integer.parseInt(SYNACK[3]);
@@ -68,6 +69,7 @@ public class Sender {
 					
 					DatagramPacket ACKPacket = new DatagramPacket(ACK, ACK.length, IP, port);
 					senderSocket.send(ACKPacket);
+					System.out.println("ACK sent");
 					
 					System.out.println("Connection Established");
 					connected = 1;
@@ -102,7 +104,7 @@ public class Sender {
 			
 			//add to packet
 			//TODO need to properly figure out seq numbering
-			String[] sendStringA = packet(false,false,false,SN,0,cutString);
+			String[] sendStringA = packet(false,false,false,SN,ACKno,cutString);
 			
 			//conversion
 			sendData = StringAToByteA(sendStringA);
@@ -129,21 +131,52 @@ public class Sender {
 				if (received[1].equals("true")){
 					SN += dataSize;
 					System.out.println("ACK received");
-					//pastPos = bytePosition;
+					pastPos = bytePosition;
 				}
 			} catch (SocketTimeoutException e){
 				System.err.println("Packet Lost");
-				//bytePosition = pastPos;
+				bytePosition = pastPos;
+				System.out.println("Retransmitting");
 			}
 			/*-------------*/
 		}
-		//Connection close
-		String[] FINA = packet(false,false,true,SN,0,null);
+		
+		//4-way connection teardown
+		System.out.println("Connection teardown initatied...");
+		String[] FIN1S = packet(false,false,true,SN,ACKno,null);
+		byte[] FIN1 = StringAToByteA(FIN1S);
+		//First FIN
+		DatagramPacket sendPacket1 = new DatagramPacket(FIN1, FIN1.length, IP, port);
+		senderSocket.send(sendPacket1);
+		System.out.println("FIN 1 Sent");
 		SN++;
-		byte[] FIN = StringAToByteA(FINA);
-		DatagramPacket sendPacket = new DatagramPacket(FIN, FIN.length, IP, port);
-		senderSocket.send(sendPacket);
-		senderSocket.close();
+		
+		DatagramPacket ACK1Packet = new DatagramPacket(new byte[1024], 1024);
+		senderSocket.receive(ACK1Packet);
+		System.out.println("ACK received");
+		byte[] ACK1B = ACK1Packet.getData();
+		String[] ACK1 = ByteAToStringA(ACK1B);
+		
+		if (ACK1[1].equals("true")){
+			String[] FIN2S = packet(false,false,true,SN,ACKno,null);
+			byte[] FIN2 = StringAToByteA(FIN2S);
+			//Second FIN
+			DatagramPacket sendPacket2 = new DatagramPacket(FIN2, FIN2.length, IP, port);
+			senderSocket.send(sendPacket2);
+			System.out.println("FIN 2 Sent");
+			SN++;
+			
+			DatagramPacket ACK2Packet = new DatagramPacket(new byte[1024], 1024);
+			senderSocket.receive(ACK2Packet);
+			System.out.println("ACK received");
+			byte[] ACK2B = ACK2Packet.getData();
+			String[] ACK2 = ByteAToStringA(ACK2B);
+			
+			if (ACK2[1].equals("true")){
+				System.out.println("Socket closed");
+				senderSocket.close();
+			}
+		}
 	}
 	
 	// Packet Maker //
