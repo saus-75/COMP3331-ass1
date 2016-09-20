@@ -19,6 +19,7 @@ public class Receiver {
 		int clientPort = 0;
 		int SN = SEQ_NUM;
 		int senderACKno = 0;
+		PrintWriter logFile = new PrintWriter("Receiver_log.txt");
 		
 		//3-way handshake
 		while (connected != 1){
@@ -82,6 +83,7 @@ public class Receiver {
 			//4-way connection teardown
 				//First FIN
 			}else if (stringData[2].equals("true")){
+				System.out.println("FIN received");
 				System.out.println("Connection teardown initiated...");
 				
 				//First ACK
@@ -98,6 +100,7 @@ public class Receiver {
 				String[] FIN2 = ByteAToStringA(FIN2B);
 				
 				if (FIN2[2].equals("true")){
+					System.out.println("FIN received");
 					//Second ACK
 					String[] ACK2 = heading(true, true, false, SN, senderACKno++);
 					byte[] ACK2Buf = StringAToByteA(ACK2);
@@ -108,6 +111,9 @@ public class Receiver {
 					//output string
 					String trimmer = whole.trim();
 					outputText(trimmer, outputFile);
+					System.out.println("socket closed");
+					logFile.close();
+					return;
 				}
 			}
 		}
