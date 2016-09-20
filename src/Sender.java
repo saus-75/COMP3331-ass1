@@ -168,7 +168,6 @@ public class Sender {
 			} catch (SocketTimeoutException e){
 				System.err.println("Packet Lost");
 				bytePosition = pastPos;
-				SN -= dataSize;
 				System.out.println("Retransmitting");
 				retrans++;
 			}
